@@ -18,9 +18,9 @@ uint16_t sensorValues[SensorCount];
 #define STBY 4   // Standby pin
 
 // PID parameters
-double Kp = 0.02;  // Start with conservative values
+double Kp = 0.015;  // Start with conservative values
 double Ki = 0;
-double Kd = 0.03;
+double Kd = 0.027;
 
 // Serial command buffer
 String inputString = "";
@@ -133,10 +133,10 @@ void PID_Linefollow(int error) {
   float PIDvalue = Kp * P + Ki * I + Kd * D;
   previousError = error;
   
-  lsp = constrain(baseSpeed + PIDvalue, -255, 255);
-  rsp = constrain(baseSpeed - PIDvalue, -255, 255);
+  rsp = constrain(baseSpeed + PIDvalue, -255, 255);
+  lsp = constrain(baseSpeed - PIDvalue, -255, 255);
 
-  motor_drive(lsp, rsp);
+  motor_drive(rsp, lsp);
 }
 
 int readLine(int lastposition, int blackLineValue){
@@ -173,35 +173,35 @@ int readLine(int lastposition, int blackLineValue){
   // }
   // Serial.print("\t position: " );
   // Serial.println(position);
-  
+
   return position;
 }
 
-void motor_drive(int left, int right) {
+void motor_drive(int right, int left) {
   digitalWrite(STBY, robotEnabled ? HIGH : LOW);
 
-  // Left motor
+  // Right motor
   if (position < 7000) {
-    if (left > 0) {
-      analogWrite(AIN1, left);
+    if (right > 0) {
+      analogWrite(AIN1, right);
       analogWrite(AIN2, 0);
     } else {
       analogWrite(AIN1, 0);
-      analogWrite(AIN2, abs(left));
+      analogWrite(AIN2, abs(right));
     }
   } else {
     analogWrite(AIN1, 0);
     analogWrite(AIN2, 30);
   }
   
-  // Right motor
+  // Left motor
   if (position > 0) {
-    if (right > 0) {
-      analogWrite(BIN1, right);
+    if (left > 0) {
+      analogWrite(BIN1, left);
       analogWrite(BIN2, 0);
     } else {
       analogWrite(BIN1, 0);
-      analogWrite(BIN2, abs(right));
+      analogWrite(BIN2, abs(left));
     }
   } else {
     analogWrite(BIN1, 0);
