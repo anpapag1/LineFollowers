@@ -137,30 +137,9 @@
             gap: .1rem;
             margin: .5rem 0;
         }
-        .cal-btn {
-            font-size: 0.8rem;
-            width: auto;
-            height:40px;  
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            position: absolute; 
-            right: 15px; 
-            top: 15px;
-            padding: .7rem;
-            background: #8383834d;
-            color: #1f1f1f;
-            border: none;
-            border-radius: .7rem;
-            font-size: 1.5rem;
-            font-weight: bold;
-        }
         @media (max-width: 600px) {
             .power-btn {
                 width: 100%;
-            }
-            .cal-btn {
-                font-size: 1rem;
             }
             .flex-container {
                 grid-template-columns: 1fr;
@@ -176,7 +155,6 @@
 </head>
 <body>
     <h1>NiaFollower Control</h1>
-    <button id='btn-cal' class='cal-btn'  onclick='startCalibration()'>Calibrate</button>
     <form action='/update' method='get'>
         <div class='card'>
             <h2>Speed Control</h2>
@@ -222,18 +200,6 @@
                     document.getElementById('btn-off').className = 'power-btn btn-off ' + (value == 0 ? 'btn-active' : 'btn-inactive');
                     if (navigator.vibrate) navigator.vibrate(50);
                 });
-        }
-        function startCalibration() {
-            const btn = document.getElementById('btn-cal');
-            btn.disabled = true;
-            btn.textContent = 'Calibrating...';
-            fetch('/calibrate', { method: 'GET' })
-            .then(response => {
-                setTimeout(() => {
-                btn.disabled = false;
-                btn.textContent = 'Calibrate';
-                }, 3000);
-            });
         }
     </script>
 </body>

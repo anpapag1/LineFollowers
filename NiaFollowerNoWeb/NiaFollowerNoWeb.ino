@@ -3,7 +3,7 @@
 
 #define LED_BUILTIN 2
 #define STRT_BTN 23 // Pin for the start button
-#define CAL_BTN 22 // Pin for the calibration button
+#define LED_BTN 22 // Pin for the led button
 
 // Sensor array
 QTRSensors qtr;
@@ -18,7 +18,7 @@ uint16_t sensorValues[SensorCount];
 #define STBY 4   // Standby pin
 
 // PID parameters
-double Kp = 0.01;  // Start with conservative values
+double Kp = 0.02;  // Start with conservative values
 double Ki = 0;
 double Kd = 0.03;
 
@@ -31,11 +31,10 @@ int P, D, I, previousError, PIDvalue, error;
 int lsp, rsp;
 int baseSpeed = 50;  // Default speed
 bool robotEnabled = false;  // Robot state
-bool Calibration = false;  
 
 void setup() {
   pinMode(STRT_BTN, INPUT_PULLUP);
-  pinMode(CAL_BTN, INPUT_PULLUP);
+  pinMode(LED_BTN, INPUT_PULLUP);
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(AIN1, OUTPUT);
   pinMode(AIN2, OUTPUT);
@@ -51,36 +50,8 @@ void setup() {
   qtr.setEmitterPin(27);
   Serial.begin(500000);
   Serial.println("PID Line Follower Control");
-  processCommand("h "); // Show help on startup
-  
-  analogReadResolution(12);  // Set ADC resolution to 12 bits
-  analogSetAttenuation(ADC_11db);  // Set ADC attenuation for higher voltage range
-
-  // calibrate sensors min max
-  // calibrateSensors();
-}
-
-void calibrateSensors() {
-  // Serial.println("Calibration mode activated");
-  // digitalWrite(STBY, LOW); // Disable motors 
-  // digitalWrite(LED_BUILTIN, HIGH);
-  // for (uint16_t i = 0; i < 200; i++) qtr.calibrate();
-  // digitalWrite(LED_BUILTIN, LOW);
-  // Serial.println("Calibration complete");
-  
-  // // print calibration values
-  // for (uint8_t i = 0; i < SensorCount; i++) {
-  //   Serial.print(qtr.calibrationOn.minimum[i]);
-  //   Serial.print(' ');
-  // }
-  // Serial.println();
-  // for (uint8_t i = 0; i < SensorCount; i++) {
-  //   Serial.print(qtr.calibrationOn.maximum[i]);
-  //   Serial.print(' ');
-  // }
-  // Serial.println();
-  // delay(1000);
-}
+  processCommand("h"); // Show help on startup
+  }
 
 void loop() {
   // Process serial commands
@@ -100,9 +71,7 @@ void loop() {
     }
   }
 
-  if (digitalRead(CAL_BTN) != HIGH || Calibration) {
-    Calibration = false;
-    calibrateSensors();
+  if (digitalRead(LED_BTN) != HIGH ) {
   }
   
   if (digitalRead(STRT_BTN) != HIGH) {
@@ -118,6 +87,7 @@ void loop() {
 }
 
 void processCommand(String command) {
+  Serial.println("Command: "+command);
   if (command.length() < 1) return;
   
   char cmd = command.charAt(0);
@@ -188,9 +158,9 @@ int readLine(int lastposition, int blackLineValue){
     position = position / count; // average the position
   } else {
     if (lastposition > 3500) {
-      position = 7500; // no sensors detected, set position to last known
+      position = 7000; // no sensors detected, set position to last known
     } else {
-      position = -500; // no sensors detected, set position to 0
+      position = 0; // no sensors detected, set position to 0
     }
   }
 
@@ -203,15 +173,15 @@ int readLine(int lastposition, int blackLineValue){
   // }
   // Serial.print("\t position: " );
   // Serial.println(position);
+  
   return position;
 }
 
 void motor_drive(int left, int right) {
   digitalWrite(STBY, robotEnabled ? HIGH : LOW);
 
-  // todo stop motor if psoition 7000
   // Left motor
-  // if (position != 7000) {
+  if (position < 7000) {
     if (left > 0) {
       analogWrite(AIN1, left);
       analogWrite(AIN2, 0);
@@ -219,14 +189,13 @@ void motor_drive(int left, int right) {
       analogWrite(AIN1, 0);
       analogWrite(AIN2, abs(left));
     }
-  // } else {
-  //   analogWrite(AIN1, 0);
-  //   analogWrite(AIN2, 30);
-  // }
+  } else {
+    analogWrite(AIN1, 0);
+    analogWrite(AIN2, 30);
+  }
   
-  // todo stop motor if psoition 0
   // Right motor
-  // if (position != 0) {
+  if (position > 0) {
     if (right > 0) {
       analogWrite(BIN1, right);
       analogWrite(BIN2, 0);
@@ -234,8 +203,8 @@ void motor_drive(int left, int right) {
       analogWrite(BIN1, 0);
       analogWrite(BIN2, abs(right));
     }
-  // } else {
-  //   analogWrite(BIN1, 0);
-  //   analogWrite(BIN2, 30);
-  // }
+  } else {
+    analogWrite(BIN1, 0);
+    analogWrite(BIN2, 30);
+  }
 }
