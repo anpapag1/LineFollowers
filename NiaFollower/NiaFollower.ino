@@ -10,6 +10,16 @@
 // Create BluetoothSerial instance
 BluetoothSerial SerialBT;
 
+#define EEPROM_SIZE 512
+#define SETTINGS_ADDRESS 0
+
+struct Settings {
+  double Kp;
+  double Ki;
+  double Kd;
+  int baseSpeed;
+};
+
 #define LED_BUILTIN 2
 #define STRT_BTN 23 // Pin for the start button
 #define LED_BTN 22 // Pin for the led button
@@ -53,6 +63,12 @@ void setup() {
 
   // Initialize Bluetooth Serial
   SerialBT.begin("NiaFollower"); // Bluetooth device name
+
+  if (!EEPROM.begin(EEPROM_SIZE)) {
+    SerialBT.println("Failed to initialize EEPROM");
+    return;
+  }
+  loadSettings();  // Load saved settings on startup
   
   delay(500);
   
@@ -124,10 +140,38 @@ void processCommand(String command) {
     case 't':
       robotEnabled = bool(value);
       break;
+    case 'w':  
+      saveSettings();
+      break;
+    case 'r':  
+      loadSettings();
+      break;
     case 'h':
       SerialBT.println(String(Kp,4)+" "+String(Ki,4)+" "+String(Kd,4)+" "+String(baseSpeed));
       break;
   }
+}
+
+void saveSettings() {
+  Settings settings = {
+    Kp,
+    Ki,
+    Kd,
+    baseSpeed
+  };
+  EEPROM.put(SETTINGS_ADDRESS, settings);
+  EEPROM.commit();
+  SerialBT.println("Settings saved to EEPROM");
+}
+
+void loadSettings() {
+  Settings settings;
+  EEPROM.get(SETTINGS_ADDRESS, settings);
+  Kp = settings.Kp;
+  Ki = settings.Ki;
+  Kd = settings.Kd;
+  baseSpeed = settings.baseSpeed;
+  SerialBT.println("Settings loaded from EEPROM");
 }
 
 void PID_Linefollow(int error) {
