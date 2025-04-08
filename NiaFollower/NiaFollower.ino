@@ -1,9 +1,18 @@
 #include <EEPROM.h>
 #include <QTRSensors.h>
+#include "BluetoothSerial.h" // Add this at the top
+
+// Check if Bluetooth is available
+#if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
+#error Bluetooth is not enabled! Please run `make menuconfig` to enable it
+#endif
+
+// Create BluetoothSerial instance
+BluetoothSerial SerialBT;
 
 #define LED_BUILTIN 2
 #define STRT_BTN 23 // Pin for the start button
-#define CAL_BTN 22 // Pin for the calibration button
+#define LED_BTN 22 // Pin for the led button
 
 // Sensor array
 QTRSensors qtr;
@@ -18,9 +27,9 @@ uint16_t sensorValues[SensorCount];
 #define STBY 4   // Standby pin
 
 // PID parameters
-double Kp = 0.008;  // Start with conservative values
+double Kp = 0.015;  // Start with conservative values
 double Ki = 0;
-double Kd = 0.015;
+double Kd = 0.027;
 
 // Serial command buffer
 String inputString = "";
@@ -31,11 +40,10 @@ int P, D, I, previousError, PIDvalue, error;
 int lsp, rsp;
 int baseSpeed = 50;  // Default speed
 bool robotEnabled = false;  // Robot state
-bool Calibration = false;  
 
 void setup() {
   pinMode(STRT_BTN, INPUT_PULLUP);
-  pinMode(CAL_BTN, INPUT_PULLUP);
+  pinMode(LED_BTN, INPUT_PULLUP);
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(AIN1, OUTPUT);
   pinMode(AIN2, OUTPUT);
@@ -43,43 +51,18 @@ void setup() {
   pinMode(BIN2, OUTPUT);
   pinMode(STBY, OUTPUT);
 
+  // Initialize Bluetooth Serial
+  SerialBT.begin("NiaFollower"); // Bluetooth device name
+  
   delay(500);
   
   // configure the sensors
   qtr.setTypeAnalog();
   qtr.setSensorPins((const uint8_t[]){ 26, 25, 33, 32, 35, 34, 39, 36}, SensorCount);
   qtr.setEmitterPin(27);
-  Serial.begin(500000);
-  Serial.println("PID Line Follower Control");
-  processCommand("h "); // Show help on startup
   
-  analogReadResolution(12);  // Set ADC resolution to 12 bits
-  analogSetAttenuation(ADC_11db);  // Set ADC attenuation for higher voltage range
-
-  // calibrate sensors min max
-  // calibrateSensors();
-}
-
-void calibrateSensors() {
-  // Serial.println("Calibration mode activated");
-  // digitalWrite(STBY, LOW); // Disable motors 
-  // digitalWrite(LED_BUILTIN, HIGH);
-  // for (uint16_t i = 0; i < 200; i++) qtr.calibrate();
-  // digitalWrite(LED_BUILTIN, LOW);
-  // Serial.println("Calibration complete");
-  
-  // // print calibration values
-  // for (uint8_t i = 0; i < SensorCount; i++) {
-  //   Serial.print(qtr.calibrationOn.minimum[i]);
-  //   Serial.print(' ');
-  // }
-  // Serial.println();
-  // for (uint8_t i = 0; i < SensorCount; i++) {
-  //   Serial.print(qtr.calibrationOn.maximum[i]);
-  //   Serial.print(' ');
-  // }
-  // Serial.println();
-  // delay(1000);
+  SerialBT.println("PID Line Follower Control");
+  processCommand("h"); // Show help on startup
 }
 
 void loop() {
@@ -90,9 +73,9 @@ void loop() {
     stringComplete = false;
   }
 
-  // Read serial data
-  while (Serial.available()) {
-    char inChar = (char)Serial.read();
+  // Read Bluetooth serial data
+  while (SerialBT.available()) {
+    char inChar = (char)SerialBT.read();
     if (inChar == '\n') {
       stringComplete = true;
     } else {
@@ -100,9 +83,7 @@ void loop() {
     }
   }
 
-  if (digitalRead(CAL_BTN) != HIGH || Calibration) {
-    Calibration = false;
-    calibrateSensors();
+  if (digitalRead(LED_BTN) != HIGH ) {
   }
   
   if (digitalRead(STRT_BTN) != HIGH) {
@@ -130,27 +111,21 @@ void processCommand(String command) {
   switch (cmd) {
     case 'p':
       Kp = value;
-      Serial.println("Kp set to: "+String(Kp,4));
       break;
     case 'i':
       Ki = value;
-      Serial.println("Ki set to: "+String(Ki,4));
       break;
     case 'd':
       Kd = value;
-      Serial.println("Kd set to: "+String(Kd,4));
       break;
     case 's':
       baseSpeed = (int)value;
-      Serial.println("Base speed set to: "+String(baseSpeed));
+      break;
+    case 't':
+      robotEnabled = bool(value);
       break;
     case 'h':
-      Serial.println("Commands:");
-      Serial.println("p = "+String(Kp,4)+" // Set Kp");
-      Serial.println("i = "+String(Ki,4)+" // Set Ki");
-      Serial.println("d = "+String(Kd,4)+" // Set Kd");
-      Serial.println("s = "+String(baseSpeed)+" // Set base speed");
-      Serial.println("h - Show this help");
+      SerialBT.println(String(Kp,4)+" "+String(Ki,4)+" "+String(Kd,4)+" "+String(baseSpeed));
       break;
   }
 }
@@ -163,10 +138,10 @@ void PID_Linefollow(int error) {
   float PIDvalue = Kp * P + Ki * I + Kd * D;
   previousError = error;
   
-  lsp = constrain(baseSpeed + PIDvalue, -255, 255);
-  rsp = constrain(baseSpeed - PIDvalue, -255, 255);
+  rsp = constrain(baseSpeed + PIDvalue, -255, 255);
+  lsp = constrain(baseSpeed - PIDvalue, -255, 255);
 
-  motor_drive(lsp, rsp);
+  motor_drive(rsp, lsp);
 }
 
 int readLine(int lastposition, int blackLineValue){
@@ -188,9 +163,9 @@ int readLine(int lastposition, int blackLineValue){
     position = position / count; // average the position
   } else {
     if (lastposition > 3500) {
-      position = 7500; // no sensors detected, set position to last known
+      position = 7000; // no sensors detected, set position to last known
     } else {
-      position = -500; // no sensors detected, set position to 0
+      position = 0; // no sensors detected, set position to 0
     }
   }
 
@@ -203,39 +178,38 @@ int readLine(int lastposition, int blackLineValue){
   // }
   // Serial.print("\t position: " );
   // Serial.println(position);
+
   return position;
 }
 
-void motor_drive(int left, int right) {
+void motor_drive(int right, int left) {
   digitalWrite(STBY, robotEnabled ? HIGH : LOW);
 
-  // todo stop motor if psoition 7000
-  // Left motor
-  // if (position != 7000) {
-    if (left > 0) {
-      analogWrite(AIN1, left);
+  // Right motor
+  if (position < 7000) {
+    if (right > 0) {
+      analogWrite(AIN1, right);
       analogWrite(AIN2, 0);
     } else {
       analogWrite(AIN1, 0);
-      analogWrite(AIN2, abs(left));
+      analogWrite(AIN2, abs(right));
     }
-  // } else {
-  //   analogWrite(AIN1, 0);
-  //   analogWrite(AIN2, 30);
-  // }
+  } else {
+    analogWrite(AIN1, 0);
+    analogWrite(AIN2, 30);
+  }
   
-  // todo stop motor if psoition 0
-  // Right motor
-  // if (position != 0) {
-    if (right > 0) {
-      analogWrite(BIN1, right);
+  // Left motor
+  if (position > 0) {
+    if (left > 0) {
+      analogWrite(BIN1, left);
       analogWrite(BIN2, 0);
     } else {
       analogWrite(BIN1, 0);
-      analogWrite(BIN2, abs(right));
+      analogWrite(BIN2, abs(left));
     }
-  // } else {
-  //   analogWrite(BIN1, 0);
-  //   analogWrite(BIN2, 30);
-  // }
+  } else {
+    analogWrite(BIN1, 0);
+    analogWrite(BIN2, 30);
+  }
 }
