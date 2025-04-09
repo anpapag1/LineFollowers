@@ -37,9 +37,9 @@ uint16_t sensorValues[SensorCount];
 #define STBY 4   // Standby pin
 
 // PID parameters
-double Kp = 0.015;  // Start with conservative values
-double Ki = 0;
-double Kd = 0.027;
+double Kp ;  // Start with conservative values
+double Ki ;
+double Kd ;
 
 // Serial command buffer
 String inputString = "";
@@ -63,6 +63,7 @@ void setup() {
 
   // Initialize Bluetooth Serial
   SerialBT.begin("NiaFollower"); // Bluetooth device name
+  Serial.begin(500000); // Initialize Serial Monitor
 
   if (!EEPROM.begin(EEPROM_SIZE)) {
     SerialBT.println("Failed to initialize EEPROM");
@@ -127,18 +128,23 @@ void processCommand(String command) {
   switch (cmd) {
     case 'p':
       Kp = value;
+      Serial.println("Kp set to " + String(Kp, 4));
       break;
     case 'i':
       Ki = value;
+      Serial.println("Ki set to " + String(Ki, 4));
       break;
     case 'd':
       Kd = value;
+      Serial.println("Kd set to " + String(Kd, 4));
       break;
     case 's':
       baseSpeed = (int)value;
+      Serial.println("Base speed set to " + String(baseSpeed));
       break;
     case 't':
       robotEnabled = bool(value);
+      Serial.println("Robot " + String(robotEnabled ? "enabled" : "disabled"));
       break;
     case 'w':  
       saveSettings();
@@ -162,6 +168,8 @@ void saveSettings() {
   EEPROM.put(SETTINGS_ADDRESS, settings);
   EEPROM.commit();
   SerialBT.println("Settings saved to EEPROM");
+  Serial.println("Settings saved to EEPROM");
+  Serial.println("Kp: " + String(Kp, 4) + ", Ki: " + String(Ki, 4) + ", Kd: " + String(Kd, 4) + ", Base Speed: " + String(baseSpeed));
 }
 
 void loadSettings() {
@@ -172,6 +180,8 @@ void loadSettings() {
   Kd = settings.Kd;
   baseSpeed = settings.baseSpeed;
   SerialBT.println("Settings loaded from EEPROM");
+  Serial.println("Settings loaded from EEPROM");
+  Serial.println("Kp: " + String(Kp, 4) + ", Ki: " + String(Ki, 4) + ", Kd: " + String(Kd, 4) + ", Base Speed: " + String(baseSpeed));
 }
 
 void PID_Linefollow(int error) {
@@ -181,9 +191,12 @@ void PID_Linefollow(int error) {
   
   float PIDvalue = Kp * P + Ki * I + Kd * D;
   previousError = error;
+
   
   rsp = constrain(baseSpeed + PIDvalue, -255, 255);
   lsp = constrain(baseSpeed - PIDvalue, -255, 255);
+
+  
 
   motor_drive(rsp, lsp);
 }
@@ -230,7 +243,7 @@ void motor_drive(int right, int left) {
   digitalWrite(STBY, robotEnabled ? HIGH : LOW);
 
   // Right motor
-  if (position < 7000) {
+  if (position < 7000 || PIDvalue == 0) {
     if (right > 0) {
       analogWrite(AIN1, right);
       analogWrite(AIN2, 0);
@@ -244,7 +257,7 @@ void motor_drive(int right, int left) {
   }
   
   // Left motor
-  if (position > 0) {
+  if (position > 0 || PIDvalue == 0) {
     if (left > 0) {
       analogWrite(BIN1, left);
       analogWrite(BIN2, 0);
