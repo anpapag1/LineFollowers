@@ -60,6 +60,8 @@ int P, D, I, previousError, PIDvalue, error;
 int lsp, rsp;
 int baseSpeed = 50;  // Default speed
 bool robotEnabled = false;  // Robot state
+bool manualControl = false; // Manual control state
+int direction = 0; // Direction of the robot manual controll
 uint8_t ledState = 0;  // LED state
 
 void setup() {
@@ -104,6 +106,7 @@ void setup() {
 
 void loop() {
   updateLEDs(ledState); // Update LED strip with rainbow effect
+  
   // Process serial commands
   if (stringComplete) {
     processCommand(inputString);
@@ -133,10 +136,13 @@ void loop() {
     while(digitalRead(STRT_BTN) != HIGH) {}
   }
 
-  position = readLine(position, 4090);
-
-  error = 3500 - position; 
-  PID_Linefollow(error);
+  if (manualControl) {
+    motor_drive(baseSpeed - direction, baseSpeed + direction); // Manual control
+  } else {
+    position = readLine(position, 4090);
+    error = 3500 - position; 
+    PID_Linefollow(error);
+  }
 }
 
 void processCommand(String command) {
@@ -150,31 +156,42 @@ void processCommand(String command) {
   }
   
   switch (cmd) {
-    case 'p':
+    case 'p': // proportional value for PID
       Kp = value;
       Serial.println("Kp set to " + String(Kp, 4));
       break;
-    case 'i':
+    case 'i': // integral value for PID
       Ki = value;
       Serial.println("Ki set to " + String(Ki, 4));
       break;
-    case 'd':
+    case 'd': // derivative value for PID
       Kd = value;
       Serial.println("Kd set to " + String(Kd, 4));
       break;
-    case 's':
+    case 's': // base speed
       baseSpeed = (int)value;
       Serial.println("Base speed set to " + String(baseSpeed));
       break;
-    case 't':
+    case 't': // robot state change
       robotEnabled = bool(value);
       Serial.println("Robot " + String(robotEnabled ? "enabled" : "disabled"));
       break;
-    case 'w':  
+    case 'w': // save settings to EEPROM
       saveSettings();
       break;
-    case 'r':  
-      loadSettings();
+    case 'm': // manual control
+      manualControl = bool(value);
+      Serial.println("Manual control " + String(manualControl ? "enabled" : "disabled"));
+      break;
+    case 'd': // the app will send a sring of caracters example: d020005 where the 020 is the speed and the 005 is the direction
+      baseSpeed = command.substring(1, 4).toInt();
+      baseSpeed -= 150; // Adjust base speed to be between -150 and 150
+      direction = command.substring(4, 7).toInt();
+      direction -= 130; // Adjust direction to be between -130 and 130
+      break;
+    case 'l': // LED state change
+      ledState = (ledState + 1) % 3; // Cycle through LED states (0, 1, 2)
+      Serial.println("LED state changed to " + String(ledState));
       break;
     case 'h':
       SerialBT.println(String(Kp,4)+" "+String(Ki,4)+" "+String(Kd,4)+" "+String(baseSpeed));
